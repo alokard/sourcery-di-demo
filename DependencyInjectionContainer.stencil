@@ -1,0 +1,44 @@
+import Dispatch
+
+public typealias Provider<E> = () -> E
+
+class Container {
+
+    {% for type in types.all %}
+    {% if type|annotated:"singleton" %}
+    private let {{type.name|lowerFirstWord}}Queue = DispatchQueue(label: "singleton:{{type.name|lowerFirstWord}}")
+    private var __{{type.name|lowerFirstWord}}: {{type.name}}?
+
+    public func {{type.name|lowerFirstWord}}() -> {{type.name}} {
+    	return {{type.name|lowerFirstWord}}Queue.sync {
+    		let res = __{{type.name|lowerFirstWord}} ?? _{{type.name|lowerFirstWord}}()
+    		self.__{{type.name|lowerFirstWord}} = res
+    		return res
+    	}
+    }
+    {% else %}
+    public func {{type.name|lowerFirstWord}}() -> {{type.name}} {
+    	return _{{type.name|lowerFirstWord}}()
+    }
+    {% endif %}
+
+    private func _{{type.name|lowerFirstWord}}() -> {{type.name}} {
+    	{% for ini in type.initializers|annotated:"inject" %}
+    	return {{type.name}}(
+    		{% for param in ini.parameters %}
+    		{% if param.typeName.name|hasPrefix:"Provider<" %}
+    		{{param.argumentLabel}}: {{param.typeName.name|replace:"Provider<",""|replace:">",""|lowerFirstWord}}
+    		{% else %}
+				{% if param.typeName.name|hasPrefix:"@escaping Provider<" %}
+				{{param.argumentLabel}}: {{param.typeName.name|replace:"@escaping Provider<",""|replace:">",""|lowerFirstWord}}
+				{% else %}
+    			{{param.argumentLabel}}: {{param.typeName.name|lowerFirstWord}}(){% if not forloop.last%},{% endif %}
+				{% endif %}
+    		{% endif %}
+    		{% endfor %}
+    	)
+    	{% endfor %}
+    }
+
+    {% endfor %}
+}
